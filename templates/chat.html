@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>hnhbot - Private Chat</title>
+    <style>
+      body {
+        background-color: #121212;
+        color: #eee;
+        font-family: 'Segoe UI', sans-serif;
+        padding: 2rem;
+      }
+      h2 {
+        color: #00e5ff;
+      }
+      #chat {
+        background-color: #1e1e1e;
+        color: #dcdcdc;
+        border: 1px solid #333;
+        width: 100%;
+        height: 300px;
+        padding: 10px;
+        font-size: 14px;
+        resize: none;
+        overflow-y: scroll;
+        white-space: pre-wrap;
+      }
+      input[type="text"] {
+        width: 70%;
+        padding: 10px;
+        font-size: 14px;
+        border: 1px solid #555;
+        background-color: #1e1e1e;
+        color: #eee;
+      }
+      button {
+        background-color: #00e5ff;
+        border: none;
+        padding: 10px 16px;
+        margin-left: 10px;
+        font-size: 14px;
+        cursor: pointer;
+        border-radius: 4px;
+        color: #000;
+      }
+      button:hover {
+        background-color: #00bcd4;
+      }
+      #typing {
+        font-size: 12px;
+        color: #aaaaaa;
+        margin-top: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Welcome, {{ username }}</h2>
+    <textarea id="chat" readonly></textarea><br><br>
+    <input type="text" id="message" placeholder="Type your message..." oninput="notifyTyping()">
+    <button onclick="sendMessage()">Send</button>
+    <button onclick="clearChat()">Clear</button>
+    <a href="/logout"><button>Logout</button></a>
+    <div id="typing"></div>
+
+    <script>
+      const username = "{{ username }}";
+      let ws;
+      let typingTimeout;
+
+      const chatBox = document.getElementById("chat");
+      const typingBox = document.getElementById("typing");
+      const inputField = document.getElementById("message");
+
+      function replaceEmojis(text) {
+        return text
+          .replace(/:\)/g, "😊")
+          .replace(/:\(/g, "🙁")
+          .replace(/:D/g, "😄")
+          .replace(/<3/g, "❤️")
+          .replace(/:P/gi, "😛")
+          .replace(/;\)/g, "😉")
+          .replace(/:o/gi, "😮");
+      }
+
+      function attachWebSocketEvents() {
+        ws.onmessage = (event) => {
+          const message = event.data;
+
+          if (message.startsWith("__typing__:")) {
+            const who = message.replace("__typing__:", "");
+            if (who !== username) {
+              typingBox.textContent = `${who} is typing...`;
+              clearTimeout(typingTimeout);
+              typingTimeout = setTimeout(() => {
+                typingBox.textContent = "";
+              }, 10000);
+            }
+            return;
+          }
+
+          const withEmoji = replaceEmojis(message);
+          chatBox.value += "\n" + withEmoji;
+          chatBox.scrollTop = chatBox.scrollHeight;
+        };
+      }
+
+      function sendMessage() {
+        const msg = inputField.value.trim();
+        if (msg && ws.readyState === WebSocket.OPEN) {
+          ws.send(msg);
+          inputField.value = "";
+          chatBox.scrollTop = chatBox.scrollHeight;
+        }
+      }
+
+      function clearChat() {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send("__clear__");
+          chatBox.value = "";
+        }
+      }
+
+      function notifyTyping() {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(`__typing__:${username}`);
+        }
+      }
+
+      window.addEventListener("load", () => {
+        ws = new WebSocket(`ws://${location.host}/ws?user=${encodeURIComponent(username)}`);
+        attachWebSocketEvents();
+      });
+    </script>
+  </body>
+</html>
