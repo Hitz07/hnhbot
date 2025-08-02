@@ -1,20 +1,27 @@
-from fastapi import FastAPI, Request, Form
+from fastapi import FastAPI, Request, Form, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi import WebSocket, WebSocketDisconnect
-from urllib.parse import parse_qs
-from datetime import datetime
 import json
+import logging
+from datetime import datetime
+
+# --- Logger setup ---
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("hnhbot")
+
+connected_clients = {}
+chat_history = []
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
+# Load users
 with open("users.json") as f:
     valid_users = json.load(f)
 
+# Sessions
 active_sessions = {}
-connected_clients = []
-chat_history = []
 
 @app.get("/", response_class=HTMLResponse)
 async def show_login(request: Request):
@@ -24,14 +31,9 @@ async def show_login(request: Request):
 async def login(request: Request, username: str = Form(...), password: str = Form(...)):
     if username in valid_users and valid_users[username] == password:
         active_sessions[request.client.host] = username
+        logger.info(f"[LOGIN] {username} logged in from {request.client.host}")
         return RedirectResponse(url="/chat", status_code=302)
     return templates.TemplateResponse("login.html", {"request": request, "error": "Invalid credentials"})
-
-@app.get("/logout")
-async def logout(request: Request):
-    if request.client.host in active_sessions:
-        del active_sessions[request.client.host]
-    return RedirectResponse(url="/", status_code=302)
 
 @app.get("/chat", response_class=HTMLResponse)
 async def chat_page(request: Request):
@@ -42,51 +44,49 @@ async def chat_page(request: Request):
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    query = parse_qs(websocket.url.query)
-    sender = query.get("user", ["Unknown"])[0]
-
     await websocket.accept()
+
+    username = websocket.query_params.get("user", "Unknown")
+    logger.info(f"[WS CONNECT] {username} connected")
 
     if len(connected_clients) >= 2:
         await websocket.send_text("Chat room full. Only 2 users allowed.")
         await websocket.close()
         return
 
-    websocket.sender = sender
-    connected_clients.append(websocket)
+    connected_clients[websocket] = username
 
-    already_sent = set()
     for msg in chat_history:
-        if msg not in already_sent:
-            await websocket.send_text(msg)
-            already_sent.add(msg)
+        await websocket.send_text(msg)
 
     try:
         while True:
             data = await websocket.receive_text()
 
-            if data.startswith("__typing__:"):
-                for client in connected_clients:
-                    if client != websocket:
-                        await client.send_text(data)
-                continue
-
             if data == "__clear__":
+                logger.info(f"[CLEAR] Chat cleared by {username}")
                 chat_history.clear()
                 for client in connected_clients:
                     await client.send_text("Chat cleared by user.")
                 continue
 
-            timestamp = datetime.now().strftime("%H:%M")
-            formatted_msg = f"{sender}: {data} [{timestamp}]"
-            chat_history.append(formatted_msg)
+            if data.startswith("__typing__"):
+                timestamp = datetime.now().strftime("[%H:%M]")
+                typing_msg = f"{username} is typing... {timestamp}"
+                for client in connected_clients:
+                    if client != websocket:
+                        await client.send_text(f"__typing__:{typing_msg}")
+                continue
+
+            timestamp = datetime.now().strftime("[%H:%M]")
+            sender = connected_clients[websocket]
+            msg = f"{sender}: {data} {timestamp}"
+            chat_history.append(msg)
 
             for client in connected_clients:
-                if client.sender == sender:
-                    await client.send_text(f"You: {data} [{timestamp}]")
-                else:
-                    await client.send_text(formatted_msg)
+                label = "You" if client == websocket else sender
+                await client.send_text(f"{label}: {data} {timestamp}")
 
     except WebSocketDisconnect:
-        if websocket in connected_clients:
-            connected_clients.remove(websocket)
+        logger.info(f"[DISCONNECT] {username} disconnected")
+        connected_clients.pop(websocket, None)

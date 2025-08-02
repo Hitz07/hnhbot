@@ -1,134 +1,87 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <title>hnhbot - Private Chat</title>
+<head>
+    <title>hnhBot Chat</title>
     <style>
-      body {
-        background-color: #121212;
-        color: #eee;
-        font-family: 'Segoe UI', sans-serif;
-        padding: 2rem;
-      }
-      h2 {
-        color: #00e5ff;
-      }
-      #chat {
-        background-color: #1e1e1e;
-        color: #dcdcdc;
-        border: 1px solid #333;
-        width: 100%;
-        height: 300px;
-        padding: 10px;
-        font-size: 14px;
-        resize: none;
-        overflow-y: scroll;
-        white-space: pre-wrap;
-      }
-      input[type="text"] {
-        width: 70%;
-        padding: 10px;
-        font-size: 14px;
-        border: 1px solid #555;
-        background-color: #1e1e1e;
-        color: #eee;
-      }
-      button {
-        background-color: #00e5ff;
-        border: none;
-        padding: 10px 16px;
-        margin-left: 10px;
-        font-size: 14px;
-        cursor: pointer;
-        border-radius: 4px;
-        color: #000;
-      }
-      button:hover {
-        background-color: #00bcd4;
-      }
-      #typing {
-        font-size: 12px;
-        color: #aaaaaa;
-        margin-top: 5px;
-      }
+        body { font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px; }
+        h2 { margin-bottom: 10px; }
+        #chatbox {
+            width: 100%;
+            height: 350px;
+            border: 1px solid #ccc;
+            background: #fff;
+            padding: 10px;
+            overflow-y: scroll;
+            margin-bottom: 10px;
+        }
+        #typing { color: #888; font-style: italic; height: 18px; }
+        input[type="text"] {
+            width: 70%;
+            padding: 10px;
+            font-size: 16px;
+        }
+        button {
+            padding: 10px 15px;
+            margin-left: 5px;
+            font-size: 16px;
+        }
+        .message {
+            margin: 4px 0;
+        }
     </style>
-  </head>
-  <body>
-    <h2>Welcome, {{ username }}</h2>
-    <textarea id="chat" readonly></textarea><br><br>
-    <input type="text" id="message" placeholder="Type your message..." oninput="notifyTyping()">
-    <button onclick="sendMessage()">Send</button>
-    <button onclick="clearChat()">Clear</button>
-    <a href="/logout"><button>Logout</button></a>
-    <div id="typing"></div>
+</head>
+<body>
 
-    <script>
-      const username = "{{ username }}";
-      let ws;
-      let typingTimeout;
+<h2>Welcome, {{ username }} 👋</h2>
 
-      const chatBox = document.getElementById("chat");
-      const typingBox = document.getElementById("typing");
-      const inputField = document.getElementById("message");
+<div id="chatbox"></div>
+<p id="typing"></p>
 
-      function replaceEmojis(text) {
-        return text
-          .replace(/:\)/g, "😊")
-          .replace(/:\(/g, "🙁")
-          .replace(/:D/g, "😄")
-          .replace(/<3/g, "❤️")
-          .replace(/:P/gi, "😛")
-          .replace(/;\)/g, "😉")
-          .replace(/:o/gi, "😮");
-      }
+<input type="text" id="messageInput" placeholder="Type a message...">
+<button id="sendBtn">Send</button>
+<button onclick="clearChat()">Clear Chat</button>
 
-      function attachWebSocketEvents() {
-        ws.onmessage = (event) => {
-          const message = event.data;
+<script>
+    const username = "{{ username }}";
+    const chatbox = document.getElementById("chatbox");
+    const messageInput = document.getElementById("messageInput");
+    const sendBtn = document.getElementById("sendBtn");
+    const typing = document.getElementById("typing");
 
-          if (message.startsWith("__typing__:")) {
-            const who = message.replace("__typing__:", "");
-            if (who !== username) {
-              typingBox.textContent = `${who} is typing...`;
-              clearTimeout(typingTimeout);
-              typingTimeout = setTimeout(() => {
-                typingBox.textContent = "";
-              }, 10000);
-            }
+    const protocol = location.protocol === "https:" ? "wss" : "ws";
+    const ws = new WebSocket(`${protocol}://${location.host}/ws?user=${encodeURIComponent(username)}`);
+
+    ws.onmessage = (event) => {
+        if (event.data.startsWith("__typing__:")) {
+            typing.textContent = event.data.replace("__typing__:", "");
+            setTimeout(() => { typing.textContent = ""; }, 3000);
             return;
-          }
-
-          const withEmoji = replaceEmojis(message);
-          chatBox.value += "\n" + withEmoji;
-          chatBox.scrollTop = chatBox.scrollHeight;
-        };
-      }
-
-      function sendMessage() {
-        const msg = inputField.value.trim();
-        if (msg && ws.readyState === WebSocket.OPEN) {
-          ws.send(msg);
-          inputField.value = "";
-          chatBox.scrollTop = chatBox.scrollHeight;
         }
-      }
 
-      function clearChat() {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send("__clear__");
-          chatBox.value = "";
+        const div = document.createElement("div");
+        div.classList.add("message");
+        div.textContent = event.data;
+        chatbox.appendChild(div);
+        chatbox.scrollTop = chatbox.scrollHeight;
+    };
+
+    sendBtn.onclick = () => {
+        const msg = messageInput.value.trim();
+        if (msg !== "") {
+            ws.send(msg);
+            messageInput.value = "";
         }
-      }
+    };
 
-      function notifyTyping() {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(`__typing__:${username}`);
-        }
-      }
+    messageInput.addEventListener("input", () => {
+        ws.send("__typing__");
+    });
 
-      window.addEventListener("load", () => {
-        ws = new WebSocket(`ws://${location.host}/ws?user=${encodeURIComponent(username)}`);
-        attachWebSocketEvents();
-      });
-    </script>
-  </body>
+    function clearChat() {
+        ws.send("__clear__");
+        chatbox.innerHTML = "";
+    }
+</script>
+
+</body>
 </html>
