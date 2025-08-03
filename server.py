@@ -1,10 +1,10 @@
 from fastapi import FastAPI, Request, Form, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import json
 import logging
 from datetime import datetime
+import pytz
 
 # --- Logger setup ---
 logging.basicConfig(level=logging.INFO)
@@ -22,6 +22,12 @@ with open("users.json") as f:
 
 # Sessions
 active_sessions = {}
+
+# --- IST Timezone setup ---
+ist = pytz.timezone("Asia/Kolkata")
+
+def current_ist_time():
+    return datetime.now(ist).strftime("[%Y-%m-%d %H:%M]")
 
 @app.get("/", response_class=HTMLResponse)
 async def show_login(request: Request):
@@ -71,14 +77,13 @@ async def websocket_endpoint(websocket: WebSocket):
                 continue
 
             if data.startswith("__typing__"):
-                timestamp = datetime.now().strftime("[%H:%M]")
-                typing_msg = f"{username} is typing... {timestamp}"
+                typing_msg = f"{username} is typing... {current_ist_time()}"
                 for client in connected_clients:
                     if client != websocket:
                         await client.send_text(f"__typing__:{typing_msg}")
                 continue
 
-            timestamp = datetime.now().strftime("[%H:%M]")
+            timestamp = current_ist_time()
             sender = connected_clients[websocket]
             msg = f"{sender}: {data} {timestamp}"
             chat_history.append(msg)
