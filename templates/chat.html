@@ -1,14 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🤖 hnhBot Chat</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🌈 hnhBot Chat</title>
   <style>
     body {
       font-family: 'Segoe UI', sans-serif;
-      background-color: #1e1e1e;
-      color: #fff;
+      background: linear-gradient(120deg, #fefcea, #f1daff);
+      color: #333;
       margin: 0;
       padding: 20px;
       display: flex;
@@ -20,37 +20,43 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 10px;
+      margin-bottom: 12px;
     }
 
     h2 {
-      color: #00ffae;
       margin: 0;
+      color: #6a00f4;
     }
 
     .logout-btn {
-      padding: 8px 12px;
+      padding: 8px 14px;
       font-size: 14px;
+      background: #ff91af;
       border: none;
       border-radius: 5px;
-      background-color: #ff5f5f;
       color: white;
       cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    .logout-btn:hover {
+      background: #ff5f89;
     }
 
     #chatbox {
       flex: 1;
-      border: 1px solid #444;
-      background: #2a2a2a;
+      background: white;
+      border: 2px solid transparent;
+      border-image: linear-gradient(135deg, #ff9a9e, #fad0c4, #fad0c4, #fbc2eb, #a1c4fd) 1;
       padding: 10px;
       overflow-y: auto;
-      border-radius: 8px;
-      box-shadow: 0 0 10px rgba(0, 255, 174, 0.2);
+      border-radius: 10px;
+      box-shadow: 0 0 15px rgba(200, 200, 255, 0.2);
       margin-bottom: 10px;
     }
 
     #typing {
-      color: #ccc;
+      color: #777;
       font-style: italic;
       height: 18px;
       margin-bottom: 6px;
@@ -59,32 +65,31 @@
     .input-area {
       display: flex;
       gap: 6px;
-      flex-wrap: nowrap;
     }
 
     input[type="text"] {
       flex: 1;
       padding: 10px;
       font-size: 16px;
-      border-radius: 5px;
-      border: 1px solid #444;
-      background: #333;
-      color: white;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      background: #fff5ff;
+      color: #333;
     }
 
     button {
       padding: 10px;
       font-size: 16px;
-      border-radius: 5px;
+      border-radius: 6px;
       border: none;
-      background-color: #00ffae;
+      background-color: #a1c4fd;
       color: black;
       cursor: pointer;
       transition: background 0.3s;
     }
 
     button:hover {
-      background-color: #00d49b;
+      background-color: #87b5f2;
     }
 
     .message {
@@ -94,83 +99,82 @@
     }
 
     @media (max-width: 600px) {
-      .logout-btn {
-        padding: 6px 10px;
+      h2 {
+        font-size: 18px;
+      }
+
+      .logout-btn, button {
         font-size: 13px;
+        padding: 8px;
       }
 
       input[type="text"] {
         font-size: 14px;
-      }
-
-      button {
-        font-size: 14px;
-        padding: 8px;
       }
     }
   </style>
 </head>
 <body>
 
-<header>
-  <h2>Welcome, {{ username }} 👋</h2>
-  <button class="logout-btn" onclick="logout()">Logout</button>
-</header>
+  <header>
+    <h2>Welcome, {{ username }} 🌟</h2>
+    <button class="logout-btn" onclick="logout()">Logout</button>
+  </header>
 
-<div id="chatbox"></div>
-<p id="typing"></p>
+  <div id="chatbox"></div>
+  <p id="typing"></p>
 
-<div class="input-area">
-  <input type="text" id="messageInput" placeholder="Type a message...">
-  <button id="sendBtn">Send</button>
-  <button onclick="clearChat()">🧹</button>
-</div>
+  <div class="input-area">
+    <input type="text" id="messageInput" placeholder="Type a message...">
+    <button id="sendBtn">Send</button>
+    <button onclick="clearChat()">🧹</button>
+  </div>
 
-<script>
-  const username = "{{ username }}";
-  const chatbox = document.getElementById("chatbox");
-  const messageInput = document.getElementById("messageInput");
-  const sendBtn = document.getElementById("sendBtn");
-  const typing = document.getElementById("typing");
+  <script>
+    const username = "{{ username }}";
+    const chatbox = document.getElementById("chatbox");
+    const messageInput = document.getElementById("messageInput");
+    const sendBtn = document.getElementById("sendBtn");
+    const typing = document.getElementById("typing");
 
-  const protocol = location.protocol === "https:" ? "wss" : "ws";
-  const ws = new WebSocket(`${protocol}://${location.host}/ws?user=${encodeURIComponent(username)}`);
+    const protocol = location.protocol === "https:" ? "wss" : "ws";
+    const ws = new WebSocket(`${protocol}://${location.host}/ws?user=${encodeURIComponent(username)}`);
 
-  ws.onmessage = (event) => {
-    if (event.data.startsWith("__typing__:")) {
-      typing.textContent = event.data.replace("__typing__:", "");
-      setTimeout(() => { typing.textContent = ""; }, 10000);
-      return;
+    ws.onmessage = (event) => {
+      if (event.data.startsWith("__typing__:")) {
+        typing.textContent = event.data.replace("__typing__:", "");
+        setTimeout(() => { typing.textContent = ""; }, 10000);
+        return;
+      }
+
+      const div = document.createElement("div");
+      div.classList.add("message");
+      div.textContent = event.data;
+      chatbox.appendChild(div);
+      chatbox.scrollTop = chatbox.scrollHeight;
+    };
+
+    sendBtn.onclick = () => {
+      const msg = messageInput.value.trim();
+      if (msg !== "") {
+        ws.send(msg);
+        messageInput.value = "";
+      }
+    };
+
+    messageInput.addEventListener("input", () => {
+      ws.send("__typing__");
+    });
+
+    function clearChat() {
+      ws.send("__clear__");
+      chatbox.innerHTML = "";
     }
 
-    const div = document.createElement("div");
-    div.classList.add("message");
-    div.textContent = event.data;
-    chatbox.appendChild(div);
-    chatbox.scrollTop = chatbox.scrollHeight;
-  };
-
-  sendBtn.onclick = () => {
-    const msg = messageInput.value.trim();
-    if (msg !== "") {
-      ws.send(msg);
-      messageInput.value = "";
+    function logout() {
+      window.location.href = "/";
     }
-  };
-
-  messageInput.addEventListener("input", () => {
-    ws.send("__typing__");
-  });
-
-  function clearChat() {
-    ws.send("__clear__");
-    chatbox.innerHTML = "";
-  }
-
-  function logout() {
-    window.location.href = "/";
-  }
-</script>
+  </script>
 
 </body>
 </html>
