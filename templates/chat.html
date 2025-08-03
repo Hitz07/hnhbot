@@ -67,7 +67,7 @@
       gap: 6px;
     }
 
-    input[type="text"] {
+    textarea {
       flex: 1;
       padding: 10px;
       font-size: 16px;
@@ -75,6 +75,9 @@
       border: 1px solid #ccc;
       background: #fff5ff;
       color: #333;
+      resize: none;
+      height: 40px;
+      line-height: 1.4;
     }
 
     button {
@@ -98,6 +101,22 @@
       word-break: break-word;
     }
 
+    .emotion-message {
+      margin: 8px 0;
+      padding: 6px 12px;
+      border-radius: 20px;
+      background: #fff0f5;
+      color: #c2185b;
+      font-size: 18px;
+      text-align: center;
+      animation: pop 0.4s ease-out;
+    }
+
+    @keyframes pop {
+      0% { transform: scale(0.8); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
     @media (max-width: 600px) {
       h2 {
         font-size: 18px;
@@ -108,7 +127,7 @@
         padding: 8px;
       }
 
-      input[type="text"] {
+      textarea {
         font-size: 14px;
       }
     }
@@ -125,9 +144,16 @@
   <p id="typing"></p>
 
   <div class="input-area">
-    <input type="text" id="messageInput" placeholder="Type a message...">
+    <textarea id="messageInput" placeholder="Type a message... (Shift + Enter for newline)"></textarea>
     <button id="sendBtn">Send</button>
     <button onclick="clearChat()">🧹</button>
+  </div>
+
+  <div style="margin-top: 10px; text-align: center;">
+    <button onclick="sendEmotion('love')">❤️ Love</button>
+    <button onclick="sendEmotion('hug')">🤗 Hug</button>
+    <button onclick="sendEmotion('kiss')">😘 Kiss</button>
+    <button onclick="sendEmotion('miss')">🥺 Miss</button>
   </div>
 
   <script>
@@ -147,6 +173,25 @@
         return;
       }
 
+      if (event.data.startsWith("__emotion__:")) {
+        const parts = event.data.split(":");
+        const type = parts[1];
+        const from = parts[2];
+        const time = parts[3];
+        const div = document.createElement("div");
+        div.classList.add("emotion-message");
+        const emojis = {
+          love: `❤️ Love from ${from} ${time}`,
+          hug: `🤗 Hug from ${from} ${time}`,
+          kiss: `😘 Kiss from ${from} ${time}`,
+          miss: `🥺 Miss you from ${from} ${time}`,
+        };
+        div.textContent = emojis[type] || "✨ Unknown Emotion";
+        chatbox.appendChild(div);
+        chatbox.scrollTop = chatbox.scrollHeight;
+        return;
+      }
+
       const div = document.createElement("div");
       div.classList.add("message");
       div.textContent = event.data;
@@ -154,17 +199,34 @@
       chatbox.scrollTop = chatbox.scrollHeight;
     };
 
-    sendBtn.onclick = () => {
+    function sendMessage() {
       const msg = messageInput.value.trim();
       if (msg !== "") {
         ws.send(msg);
         messageInput.value = "";
+        messageInput.style.height = "40px";
       }
-    };
+    }
+
+    sendBtn.onclick = sendMessage;
 
     messageInput.addEventListener("input", () => {
       ws.send("__typing__");
+      messageInput.style.height = "auto";
+      messageInput.style.height = messageInput.scrollHeight + "px";
     });
+
+    messageInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    function sendEmotion(type) {
+      const time = new Date().toISOString();
+      ws.send(`__emotion__:${type}`);
+    }
 
     function clearChat() {
       ws.send("__clear__");

@@ -5,34 +5,13 @@ import json
 import logging
 from datetime import datetime
 import pytz
-import os
 
 # --- Logger setup ---
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("hnhbot")
 
-# --- IST Timezone setup ---
-ist = pytz.timezone("Asia/Kolkata")
-def current_ist_time():
-    return datetime.now(ist).strftime("[%Y-%m-%d %H:%M]")
-
-# --- Paths ---
-HISTORY_FILE = "chat_history.json"
-
-def load_chat_history():
-    if not os.path.exists(HISTORY_FILE):
-        with open(HISTORY_FILE, "w") as f:
-            json.dump([], f)
-    with open(HISTORY_FILE, "r") as f:
-        return json.load(f)
-
-def save_chat_history(history):
-    with open(HISTORY_FILE, "w") as f:
-        json.dump(history, f, indent=2)
-
-# --- Globals ---
 connected_clients = {}
-chat_history = load_chat_history()
+chat_history = []
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
@@ -43,6 +22,11 @@ with open("users.json") as f:
 
 # Sessions
 active_sessions = {}
+
+# --- IST Timezone setup ---
+ist = pytz.timezone("Asia/Kolkata")
+def current_ist_time():
+    return datetime.now(ist).strftime("[%Y-%m-%d %H:%M]")
 
 @app.get("/", response_class=HTMLResponse)
 async def show_login(request: Request):
@@ -66,6 +50,7 @@ async def chat_page(request: Request):
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
+
     username = websocket.query_params.get("user", "Unknown")
     logger.info(f"[WS CONNECT] {username} connected")
 
@@ -76,13 +61,8 @@ async def websocket_endpoint(websocket: WebSocket):
 
     connected_clients[websocket] = username
 
-    # Send existing chat history
-    for item in chat_history:
-        sender = item["user"]
-        message = item["message"]
-        timestamp = item["timestamp"]
-        label = "You" if sender == username else sender
-        await websocket.send_text(f"{label}: {message} {timestamp}")
+    for msg in chat_history:
+        await websocket.send_text(msg)
 
     try:
         while True:
@@ -91,7 +71,6 @@ async def websocket_endpoint(websocket: WebSocket):
             if data == "__clear__":
                 logger.info(f"[CLEAR] Chat cleared by {username}")
                 chat_history.clear()
-                save_chat_history(chat_history)
                 for client in connected_clients:
                     await client.send_text("Chat cleared by user.")
                 continue
@@ -103,17 +82,32 @@ async def websocket_endpoint(websocket: WebSocket):
                         await client.send_text(f"__typing__:{typing_msg}")
                 continue
 
+            # EMOTION HANDLING
+            if data.startswith("__emotion__:"):
+                emotion_type = data.replace("__emotion__:", "").strip()
+                emoji_map = {
+                    "love": "❤️ Love",
+                    "hug": "🤗 Hug",
+                    "kiss": "😘 Kiss",
+                    "miss": "🥺 Miss you"
+                }
+
+                if emotion_type in emoji_map:
+                    ts = current_ist_time()
+                    msg = f"__emotion__:{emotion_type}:{username}:{ts}"
+                    chat_history.append(msg)
+                    for client in connected_clients:
+                        await client.send_text(msg)
+                continue
+
+            # REGULAR MESSAGE
             timestamp = current_ist_time()
-            msg_record = {
-                "user": username,
-                "message": data,
-                "timestamp": timestamp
-            }
-            chat_history.append(msg_record)
-            save_chat_history(chat_history)
+            sender = connected_clients[websocket]
+            msg = f"{sender}: {data} {timestamp}"
+            chat_history.append(msg)
 
             for client in connected_clients:
-                label = "You" if client == websocket else username
+                label = "You" if client == websocket else sender
                 await client.send_text(f"{label}: {data} {timestamp}")
 
     except WebSocketDisconnect:
